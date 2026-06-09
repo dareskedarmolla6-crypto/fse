@@ -1,0 +1,4 @@
+# Ignore sensitive configuration files
+config/settings.py
+__pycache__/
+*.pyc
