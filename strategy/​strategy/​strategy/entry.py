@@ -1,0 +1,1 @@
+-> def entry_signal(): return True
