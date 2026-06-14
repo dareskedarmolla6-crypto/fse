@@ -45,3 +45,11 @@ class APISecurityManager:
     def verify(self, payload: str, signature: str) -> bool:
         expected = self.sign(payload)
         return hmac.compare_digest(expected, signature)
+# Safety improvement: prevent signing with empty secret (runtime protection)
+def validate_secret(self):
+    if not self.secret:
+        raise ValueError("Missing API secret for signing")
+
+# Optional helper: quick market profile shortcut
+def get_profile(self, symbol):
+    return self.get(symbol)
