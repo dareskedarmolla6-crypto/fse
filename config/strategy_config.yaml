@@ -1,1 +1,90 @@
-Ehggnter
+# ==========================================
+# FSE Strategy Configuration
+# ==========================================
+
+system:
+  name: FSE
+  mode: AUTO
+  scan_interval_seconds: 180
+
+market:
+  focus: ALPHA_COINS
+  min_volatility_percent: 15
+  enable_rotation: true
+  max_active_coins: 10
+
+strategies:
+  long:
+    enabled: true
+
+  short:
+    enabled: true
+
+  hedge:
+    enabled: true
+    allow_simultaneous_positions: true
+
+  grid:
+    enabled: true
+    levels: 5
+    spacing_percent: 1.0
+
+
+confidence:
+  minimum_trade: 15
+
+leverage:
+  confidence_based: true
+
+  levels:
+    "15-25": 5
+    "26-35": 8
+    "36-55": 10
+    "56-75": 15
+    "76-85": 20
+    "86+": 30
+
+risk_management:
+  stop_loss_enabled: true
+  trailing_stop_enabled: true
+  partial_take_profit: true
+  profit_lock: true
+
+execution:
+  smart_order_routing: true
+  multi_exchange_support: true
+
+exchanges:
+  crypto:
+    - BINANCE
+    - BYBIT
+    - OKX
+    - KUCOIN
+    - GATE_IO
+    - MEXC
+    - BITGET
+
+  forex:
+    - MT5
+    - OANDA
+    - IC_MARKETS
+    - PEPPERSTONE
+    - EXNESS
+
+future_markets:
+  commodities:
+    - GOLD
+    - SILVER
+    - OIL
+
+  indices:
+    enabled: true
+
+  stocks:
+    enabled: true
+
+
+logging:
+  trade_logs: true
+  error_logs: true
+  performance_logs: true
