@@ -42,3 +42,5 @@ class EnvConfig:
             )
 
         return True
+# Validate environment variables on startup (recommended for safety)
+EnvConfig.validate()
