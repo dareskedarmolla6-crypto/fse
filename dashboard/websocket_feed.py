@@ -1,44 +1,40 @@
+
+# fse/dashboard/websocket_feed.py
 import asyncio
 import json
 import random
 import time
+import logging
 
+logger = logging.getLogger(__name__)
 
 # =========================
 # MOCK MARKET DATA STREAM
 # =========================
 class MarketWebSocketFeed:
-    """
-    Simulated websocket feed (later replace with Binance/Bybit WS)
-    """
+    """ሲሙሌት የተደረገ የገበያ መረጃ ማስተላለፊያ (ለወደፊቱ Binance/Bybit WS ይተካል)"""
 
-    def __init__(self, symbol="DOGEUSDT"):
+    def __init__(self, symbol="BTCUSDT"):
         self.symbol = symbol
         self.running = False
 
     async def stream_price(self):
-        """
-        Generates fake live market ticks
-        """
+        """የገበያ ዋጋዎችን በየሰከንዱ ማመንጨት።"""
         while self.running:
             tick = {
                 "symbol": self.symbol,
-                "price": round(random.uniform(0.08, 0.12), 5),
-                "volume": random.uniform(100, 1000),
+                "price": round(random.uniform(40000, 45000), 2),
+                "volume": round(random.uniform(1, 10), 4),
                 "timestamp": time.time()
             }
-
             yield tick
             await asyncio.sleep(1)
-
 
 # =========================
 # DASHBOARD FEED BROADCASTER
 # =========================
 class DashboardFeed:
-    """
-    Sends structured data to dashboard UI (WebSocket layer)
-    """
+    """ለዳሽቦርዱ መረጃን በWebSocket ማሰራጫ።"""
 
     def __init__(self):
         self.clients = set()
@@ -50,27 +46,22 @@ class DashboardFeed:
         self.clients.discard(client)
 
     async def broadcast(self, message: dict):
-        """
-        Send data to all connected dashboard clients
-        """
-        if not self.clients:
-            return
-
+        """ለሁሉም የተገናኙ ክሊየንቶች መረጃን ማስተላለፍ።"""
+        if not self.clients: return
         payload = json.dumps(message)
-
         for client in list(self.clients):
             try:
                 await client.send(payload)
-            except:
+            except Exception as e:
+                logger.error(f"❌ Broadcast error: {e}")
                 self.unregister(client)
-
 
 # =========================
 # BOT STATUS STREAM
 # =========================
 class BotStatus:
     def __init__(self):
-        self.balance = 1000
+        self.balance = 1000.0
         self.open_positions = 0
         self.last_signal = None
         self.last_confidence = 0
@@ -82,13 +73,12 @@ class BotStatus:
 
     def snapshot(self):
         return {
-            "balance": self.balance,
+            "balance": round(self.balance, 2),
             "open_positions": self.open_positions,
             "last_signal": self.last_signal,
             "confidence": self.last_confidence,
             "timestamp": time.time()
         }
-
 
 # =========================
 # MAIN STREAM ENGINE
@@ -101,35 +91,13 @@ class WebSocketFeedEngine:
         self.running = False
 
     async def run(self):
+        """ዋናው የስትሪም አፈጻጸም ክፍል (መርህ #6)።"""
         self.running = True
         self.feed.running = True
-
+        logger.info("🚀 WebSocket Feed Engine Started.")
+        
         async for tick in self.feed.stream_price():
-            if not self.running:
-                break
-
-            # simulate signal (later replace with brain)
-            signal = random.choice(["LONG", "SHORT", "HEDGE", "NONE"])
-            confidence = random.randint(10, 95)
-
-            self.status.update(signal, confidence)
-
-            message = {
-                "market": tick,
-                "bot": self.status.snapshot(),
-                "signal": signal
-            }
-
-            await self.dashboard.broadcast(message)
-
-    def stop(self):
-        self.running = False
-        self.feed.running = False
-# Safety improvement: ensure stream stops cleanly on engine stop
-def safe_stop(self):
-    self.stop()
-    self.feed.running = False
-    self.dashboard.clients.clear()
-
-# Optional safeguard: prevent NONE signal spam in production
-MAX_NONE_SIGNALS = 3
+            if not self.running: break
+            # የገበያ መረጃን እና የቦት ሁኔታን ማዋሃድ
+            payload = {**tick, **self.status.snapshot()}
+            await self.dashboard.broadcast(payload)
