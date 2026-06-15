@@ -1,81 +1,59 @@
-# portfolio/portfolio_manager.py
+
+# fse/portfolio/portfolio_manager.py
+import logging
+
+logger = logging.getLogger(__name__)
 
 class PortfolioManager:
+    """የፖርትፎሊዮ ካፒታልን የሚያከፋፍል እና አጠቃላይ አደጋን የሚቆጣጠር (መርህ #7)።"""
+    
     def __init__(self, total_capital: float):
-        self.total_capital = total_capital
-        self.reserve_ratio = 0.25
+        self.total_capital = float(total_capital)
+        self.reserve_ratio = 0.25  # 25% የጥሬ ገንዘብ መጠባበቂያ
         self.positions = []
-        self.balance = total_capital
+        self.balance = float(total_capital)
 
-    # =========================
-    # CAPITAL ALLOCATION
-    # =========================
     def allocate_capital(self, strategies):
-        """
-        Allocate capital dynamically based on strategy scores.
-        Higher score = more allocation.
-        """
+        """በስልቶች ውጤት (Score) መሰረት ካፒታልን በስሜት የሚመድብ።"""
         if not strategies:
             return {}
 
         total_score = sum(s["score"] for s in strategies)
-
+        available_capital = self.balance * (1.0 - self.reserve_ratio)
         allocations = {}
-        available_capital = self.balance * (1 - self.reserve_ratio)
 
         for s in strategies:
-            weight = s["score"] / total_score
+            weight = s["score"] / total_score if total_score > 0 else 0
             allocations[s["symbol"]] = available_capital * weight
 
         return allocations
 
-    # =========================
-    # EXPOSURE CONTROL
-    # =========================
     def check_symbol_exposure(self, symbol, current_exposure):
-        """
-        Limit exposure per symbol to 20%
-        """
+        """ለእያንዳንዱ ምልክት የ20% የሪስክ ጣሪያ ማስቀመጥ።"""
         max_exposure = self.total_capital * 0.20
-
         if current_exposure >= max_exposure:
+            logger.warning(f"⚠️ Exposure limit reached for {symbol}")
             return False, "EXPOSURE_LIMIT_REACHED"
-
         return True, "OK"
 
-    # =========================
-    # HEALTH SCORE
-    # =========================
     def calculate_health_score(self):
-        """
-        Simple portfolio health score:
-        - fewer positions = better
-        - higher balance = better
-        """
+        """የፖርትፎሊዮን አጠቃላይ ጤንነት መለኪያ (Health Score)።"""
         exposure_penalty = len(self.positions) * 2
         balance_factor = (self.balance / self.total_capital) * 100
-
         score = balance_factor - exposure_penalty
-        return max(0, min(100, score))
+        return max(0.0, min(100.0, score))
 
-    # =========================
-    # UPDATE AFTER TRADE
-    # =========================
     def update(self, trade_result):
-        """
-        Update portfolio after trade execution
-        """
-        pnl = trade_result.get("pnl", 0)
-
+        """የንግድ ውጤቶችን ተከትሎ ፖርትፎሊዮን ማዘመን።"""
+        pnl = float(trade_result.get("pnl", 0))
         self.balance += pnl
         self.positions.append(trade_result)
+        logger.info(f"📊 Portfolio Updated: PnL {pnl} | New Balance {self.balance}")
 
-    # =========================
-    # POSITION SUMMARY
-    # =========================
     def state(self):
+        """የፖርትፎሊዮን ወቅታዊ ሁኔታ መመለስ።"""
         return {
-            "balance": self.balance,
+            "balance": round(self.balance, 2),
             "open_positions": len(self.positions),
-            "health_score": self.calculate_health_score()
+            "health_score": round(self.calculate_health_score(), 2)
         }
