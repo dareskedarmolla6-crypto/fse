@@ -1,82 +1,70 @@
+
+# fse/execution/order_executor.py
 import time
 import uuid
 import hashlib
+import logging
 
+logger = logging.getLogger(__name__)
 
 # =========================================================
-# IDEMPOTENCY KEY
+# IDEMPOTENCY KEY (የተባዙ ትዕዛዞችን ለመከላከል)
 # =========================================================
 def generate_idempotency_key(symbol, side, qty, strategy_id, bucket):
     raw = f"{symbol}:{side}:{qty}:{strategy_id}:{bucket}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
-
 # =========================================================
 # LIVE EXECUTOR (DIRECT EXECUTION LAYER)
 # =========================================================
 class LiveExecutor:
+    """የትዕዛዝ ውሳኔዎችን ወደ ተግባር የሚቀይር ክፍል (መርህ #6)።"""
+    
     def __init__(self, exchange):
         self.exchange = exchange
 
     def execute_trade(self, decision, symbol, size):
-
-        if decision == "LONG":
-            return self.exchange.place_order(symbol, "BUY", size)
-
-        elif decision == "SHORT":
-            return self.exchange.place_order(symbol, "SELL", size)
-
-        elif decision == "GRID":
-            orders = []
-            step = size / 3
-
-            for _ in range(3):
-                orders.append(
-                    self.exchange.place_order(symbol, "BUY", step)
-                )
-
-            return orders
-
-        elif decision == "HEDGE":
-            return {
-                "LONG": self.exchange.place_order(symbol, "BUY", size / 2),
-                "SHORT": self.exchange.place_order(symbol, "SELL", size / 2)
-            }
-
+        try:
+            if decision == "LONG":
+                return self.exchange.place_order(symbol, "BUY", size)
+            elif decision == "SHORT":
+                return self.exchange.place_order(symbol, "SELL", size)
+            elif decision == "GRID":
+                orders = [self.exchange.place_order(symbol, "BUY", size / 3) for _ in range(3)]
+                return orders
+            elif decision == "HEDGE":
+                return {
+                    "LONG": self.exchange.place_order(symbol, "BUY", size / 2),
+                    "SHORT": self.exchange.place_order(symbol, "SELL", size / 2)
+                }
+        except Exception as e:
+            logger.error(f"❌ Execution error: {e}")
         return None
-
 
 # =========================================================
 # EXCHANGE EXECUTOR (LOW-LEVEL API WRAPPER)
 # =========================================================
 class ExchangeExecutor:
+    """ከኤፒአይ ጋር የሚገናኝ መሰረታዊ አፈጻጸም ክፍል (Safety Wrapper)።"""
+    
     def __init__(self, api):
         self.api = api
 
     def open_order(self, symbol, side, quantity):
         try:
-            order = self.api.create_order(
-                symbol=symbol,
-                side=side,
-                type="MARKET",
-                quantity=quantity
-            )
-            return {
-                "status": "OPENED",
-                "order": order
-            }
-
+            order = self.api.create_order(symbol=symbol, side=side, type="MARKET", quantity=quantity)
+            logger.info(f"✅ Order opened: {symbol} {side} {quantity}")
+            return {"status": "OPENED", "order": order}
         except Exception as e:
-            return {
-                "status": "ERROR",
-                "message": str(e)
-            }
-
+            logger.error(f"❌ Order failed: {e}")
+            return {"status": "ERROR", "message": str(e)}
 
 # =========================================================
 # POSITION MANAGER
 # =========================================================
 class PositionManager:
+    """ክፍት የሆኑ ቦታዎችን (Positions) የሚያስተዳድር ክፍል (መርህ #7)።"""
+    
     def __init__(self):
         self.positions = []
 
@@ -88,81 +76,4 @@ class PositionManager:
             if p.get("id") == position_id:
                 p["status"] = "CLOSED"
                 return p
-        return "NOT_FOUND"
-
-
-# =========================================================
-# EXECUTION COORDINATOR (RISK + EXECUTION ORCHESTRATION)
-# =========================================================
-class ExecutionCoordinator:
-    def __init__(self, risk_engine, gateway, store, verifier, lock_mgr):
-        self.risk = risk_engine
-        self.gateway = gateway
-        self.store = store
-        self.verifier = verifier
-        self.lock = lock_mgr
-
-    def execute_signal(self, signal):
-
-        if self.store.get("system_status") in ["STOP", "EMERGENCY"]:
-            raise Exception("SYSTEM HALTED")
-
-        with self.lock.acquire(signal["portfolio_id"]):
-
-            if not self.risk.validate_new_position(signal):
-                return None
-
-            trade_id = f"BOT_{uuid.uuid4().hex[:16]}"
-
-            trade = {
-                "trade_id": trade_id,
-                "symbol": signal["symbol"],
-                "side": signal["side"],
-                "status": "CREATED",
-                "repair_attempts": 0,
-                "ts": time.time()
-            }
-
-            self.store.save(trade)
-
-            key = generate_idempotency_key(
-                signal["symbol"],
-                signal["side"],
-                signal["qty"],
-                signal["strategy_id"],
-                int(time.time() // 60)
-            )
-
-            resp = self.gateway.place_order(
-                signal,
-                idempotency_key=key
-            )
-
-            return self.verifier.verify_order(
-                trade_id,
-                signal["symbol"],
-                resp["orderId"]
-            )
-
-
-# =========================================================
-# MULTI MARKET EXECUTION ENGINE
-# =========================================================
-class MultiMarketExecutionEngine:
-    def __init__(self, router, notifier, controller):
-        self.router = router
-        self.notifier = notifier
-        self.controller = controller
-
-    def execute(self, signal):
-        result = self.controller.place_order(
-            signal["symbol"],
-            signal["side"],
-            signal["qty"]
-        )
-
-        return self.notifier.notify_and_return(
-            signal["symbol"],
-            signal["side"],
-            result
-        )
+        return None
